@@ -16,7 +16,6 @@ async function generateImages() {
   // Define predefined styles
   const predefinedStyles = {
     default: '',
-
     // Your predefined styles here
   };
 
@@ -39,15 +38,16 @@ async function generateImages() {
   try {
     const requests = Array.from({ length: parallelRequests }, async (_, index) => {
       try {
+        // Notice: Make sure to send "prompt" instead of "data" here
         const requestBody = {
-          data: combinedValue,
+          prompt: combinedValue,
           size: imageSize,
           quality: quality,
           autoSavePNG: autoSavePNG,
           autoSaveSVG: autoSaveSVG,
           potraceOptions: potraceOptions
         };
-
+        console.log("Final requestBody:", requestBody);
         const response = await fetch('/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -95,7 +95,7 @@ async function generateImages() {
           svgLink.href = '#';
           svgLink.innerText = 'SVG';
           svgLink.addEventListener('click', (event) => {
-            event.preventDefault(); // Prevent default anchor behavior
+            event.preventDefault();
             console.log('Downloading SVG...');
             downloadSVG(result.svgData, `image_${index + 1}.svg`);
           });
@@ -105,7 +105,7 @@ async function generateImages() {
           pngLink.href = '#';
           pngLink.innerText = 'PNG';
           pngLink.addEventListener('click', (event) => {
-            event.preventDefault(); // Prevent default anchor behavior
+            event.preventDefault();
             console.log('Downloading PNG...');
             downloadPNG(result.imageUrl, `image_${index + 1}.png`);
           });
@@ -117,7 +117,6 @@ async function generateImages() {
           dropdownContainer.appendChild(dropdownMenu);
 
           imageContainer.appendChild(dropdownContainer);
-
           resultContainer.appendChild(imageContainer);
         } else {
           console.error('Error in generating image:', result.error);
@@ -148,24 +147,17 @@ function shouldAutoSaveSVG() {
 function downloadSVG(svgData, filename) {
   const blob = new Blob([svgData], { type: 'image/svg+xml' });
   const url = window.URL.createObjectURL(blob);
-
-  fetch(url)
-    .then(response => response.blob())
-    .then(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    })
-    .catch(error => console.error('Error downloading SVG:', error))
-    .finally(() => {
-      window.URL.revokeObjectURL(url);
-    });
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
 }
 
 function downloadPNG(imageUrl, filename) {
+  // This example assumes your server supports a proxy endpoint for PNG downloads.
   fetch(`/proxy?url=${encodeURIComponent(imageUrl)}`, {
     method: 'GET',
     headers: { 'Accept': 'image/png' },
@@ -179,9 +171,7 @@ function downloadPNG(imageUrl, filename) {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-    })
-    .catch(error => console.error('Error downloading PNG:', error))
-    .finally(() => {
       URL.revokeObjectURL(url);
-    });
+    })
+    .catch(error => console.error('Error downloading PNG:', error));
 }
