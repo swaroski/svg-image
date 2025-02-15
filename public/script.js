@@ -48,7 +48,7 @@ async function generateImages() {
           potraceOptions: potraceOptions
         };
         console.log("Final requestBody:", requestBody);
-        const response = await fetch('/generate-image', {
+        const response = await fetch('https://svg-image.vercel.app/api/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
