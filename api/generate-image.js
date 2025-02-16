@@ -349,10 +349,10 @@ export const config = {
 */ 
 
 
-
-const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
+/*
+//const express = require("express");
+////const cors = require("cors");
+//const bodyParser = require("body-parser");
 const dotenv = require("dotenv");
 const path = require("path");
 const fs = require("fs");
@@ -382,10 +382,7 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-/**
- * ✅ POST /api/generate-image
- * Generates an image from the given text prompt using Fal.AI
- */
+
 app.post("/api/generate-image", async (req, res) => {
   const { prompt } = req.body;
   if (!prompt) {
@@ -420,10 +417,7 @@ app.post("/api/generate-image", async (req, res) => {
   }
 });
 
-/**
- * ✅ POST /api/convert-to-svg
- * Converts a raster image into an SVG using Potrace
- */
+
 app.post("/api/convert-to-svg", async (req, res) => {
   try {
     const { imageUrl } = req.body;
@@ -456,9 +450,7 @@ app.post("/api/convert-to-svg", async (req, res) => {
   }
 });
 
-/**
- * ✅ Utility function to vectorize an image using Potrace
- */
+
 function vectorizeImage(imageUrl, callback) {
   axios
     .get(imageUrl, { responseType: "arraybuffer" })
@@ -488,3 +480,88 @@ module.exports = app;
 export const config = {
   runtime: "edge",
 };
+*/ 
+
+
+
+
+
+import { fal } from "@fal-ai/client";
+import axios from "axios";
+import potrace from "potrace";
+
+// ✅ Required for Vercel Edge Functions
+export const config = {
+  runtime: "edge",
+};
+
+/**
+ * ✅ Handles both image generation & SVG conversion.
+ */
+export default async function handler(req) {
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Only POST requests allowed" }), { status: 405 });
+  }
+
+  try {
+    const { prompt, imageUrl, convertToSvg } = await req.json();
+
+    if (convertToSvg) {
+      return await convertImageToSVG(imageUrl);
+    }
+
+    if (!prompt) {
+      return new Response(JSON.stringify({ error: "❌ Missing prompt in request" }), { status: 400 });
+    }
+
+    console.log(`🔥 Generating image for prompt: ${prompt}`);
+
+    const result = await fal.subscribe("fal-ai/flux-pro/v1.1-ultra", {
+      input: { prompt },
+      logs: true,
+    });
+
+    if (!result?.data?.images?.length) {
+      return new Response(JSON.stringify({ error: "❌ Image generation failed" }), { status: 500 });
+    }
+
+    const generatedImageUrl = result.data.images[0].url;
+    console.log(`✅ Generated Image URL: ${generatedImageUrl}`);
+
+    return new Response(JSON.stringify({ success: true, imageUrl: generatedImageUrl }), {
+      status: 200,
+    });
+  } catch (error) {
+    console.error("🔥 Fal.AI API Error:", error);
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500 });
+  }
+}
+
+/**
+ * ✅ Converts a raster image to SVG using Potrace
+ */
+async function convertImageToSVG(imageUrl) {
+  if (!imageUrl) {
+    return new Response(JSON.stringify({ error: "❌ Image URL is required for SVG conversion" }), { status: 400 });
+  }
+
+  try {
+    const response = await axios.get(imageUrl, { responseType: "arraybuffer" });
+    const imageBuffer = Buffer.from(response.data);
+
+    return new Promise((resolve) => {
+      potrace.trace(imageBuffer, (err, svg) => {
+        if (err) {
+          console.error("❌ Error vectorizing image:", err);
+          resolve(new Response(JSON.stringify({ error: "Error vectorizing image" }), { status: 500 }));
+        } else {
+          console.log("✅ Vectorization result:", svg);
+          resolve(new Response(JSON.stringify({ success: true, svgData: svg }), { status: 200 }));
+        }
+      });
+    });
+  } catch (error) {
+    console.error("❌ Error downloading image for vectorization:", error);
+    return new Response(JSON.stringify({ error: "Error downloading image" }), { status: 500 });
+  }
+}
