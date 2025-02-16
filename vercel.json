@@ -4,7 +4,11 @@
     "api/generate-image.js": {
       "runtime": "edge"
     }
-  }
+  },
+  "routes": [
+    { "src": "/api/generate-image", "dest": "/api/generate-image.js" }
+  ]
 }
+
 
   
