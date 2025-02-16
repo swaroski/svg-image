@@ -485,33 +485,25 @@ export const config = {
 
 
 
-
 import { fal } from "@fal-ai/client";
 import axios from "axios";
 import potrace from "potrace";
+import express from "express";
 
-// ✅ Required for Vercel Edge Functions
-export const config = {
-  runtime: "edge",
-};
+const app = express();
+app.use(express.json());
 
-/**
- * ✅ Handles both image generation & SVG conversion.
- */
-export default async function handler(req) {
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Only POST requests allowed" }), { status: 405 });
-  }
-
+// ✅ Handles both image generation & SVG conversion.
+app.post("/api/generate-image", async (req, res) => {
   try {
-    const { prompt, imageUrl, convertToSvg } = await req.json();
+    const { prompt, imageUrl, convertToSvg } = req.body;
 
     if (convertToSvg) {
-      return await convertImageToSVG(imageUrl);
+      return await convertImageToSVG(imageUrl, res);
     }
 
     if (!prompt) {
-      return new Response(JSON.stringify({ error: "❌ Missing prompt in request" }), { status: 400 });
+      return res.status(400).json({ error: "❌ Missing prompt in request" });
     }
 
     console.log(`🔥 Generating image for prompt: ${prompt}`);
@@ -522,46 +514,45 @@ export default async function handler(req) {
     });
 
     if (!result?.data?.images?.length) {
-      return new Response(JSON.stringify({ error: "❌ Image generation failed" }), { status: 500 });
+      return res.status(500).json({ error: "❌ Image generation failed" });
     }
 
     const generatedImageUrl = result.data.images[0].url;
     console.log(`✅ Generated Image URL: ${generatedImageUrl}`);
 
-    return new Response(JSON.stringify({ success: true, imageUrl: generatedImageUrl }), {
-      status: 200,
-    });
+    return res.status(200).json({ success: true, imageUrl: generatedImageUrl });
   } catch (error) {
     console.error("🔥 Fal.AI API Error:", error);
-    return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500 });
+    return res.status(500).json({ error: "Internal Server Error" });
   }
-}
+});
 
 /**
  * ✅ Converts a raster image to SVG using Potrace
  */
-async function convertImageToSVG(imageUrl) {
+async function convertImageToSVG(imageUrl, res) {
   if (!imageUrl) {
-    return new Response(JSON.stringify({ error: "❌ Image URL is required for SVG conversion" }), { status: 400 });
+    return res.status(400).json({ error: "❌ Image URL is required for SVG conversion" });
   }
 
   try {
     const response = await axios.get(imageUrl, { responseType: "arraybuffer" });
     const imageBuffer = Buffer.from(response.data);
 
-    return new Promise((resolve) => {
-      potrace.trace(imageBuffer, (err, svg) => {
-        if (err) {
-          console.error("❌ Error vectorizing image:", err);
-          resolve(new Response(JSON.stringify({ error: "Error vectorizing image" }), { status: 500 }));
-        } else {
-          console.log("✅ Vectorization result:", svg);
-          resolve(new Response(JSON.stringify({ success: true, svgData: svg }), { status: 200 }));
-        }
-      });
+    potrace.trace(imageBuffer, (err, svg) => {
+      if (err) {
+        console.error("❌ Error vectorizing image:", err);
+        return res.status(500).json({ error: "Error vectorizing image" });
+      } else {
+        console.log("✅ Vectorization result:", svg);
+        return res.status(200).json({ success: true, svgData: svg });
+      }
     });
   } catch (error) {
     console.error("❌ Error downloading image for vectorization:", error);
-    return new Response(JSON.stringify({ error: "Error downloading image" }), { status: 500 });
+    return res.status(500).json({ error: "Error downloading image" });
   }
 }
+
+// ✅ Export for Vercel Serverless Functions
+export default app;

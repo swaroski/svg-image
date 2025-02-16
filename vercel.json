@@ -1,19 +1,16 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/generate-image.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/generate-image",
-      "dest": "/api/generate-image.js"
-    }
-  ]
-}
-
-
-
+    "version": 2,
+    "builds": [
+      {
+        "src": "api/generate-image.js",
+        "use": "@vercel/node"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/api/generate-image",
+        "dest": "/api/generate-image.js"
+      }
+    ]
+  }
   
