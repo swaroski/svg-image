@@ -195,9 +195,7 @@ app.listen(port, () => {
 
 
 
-/**
- * server.js
- */
+/*
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -235,11 +233,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-/**
- * POST /generate-image
- * 
- * Expects a JSON body containing { "prompt": "some text..." }
- */
+
 app.post('/api/generate-image', async (req, res) => {
   const { prompt } = req.body;
   if (!prompt) {
@@ -280,12 +274,7 @@ app.post('/api/generate-image', async (req, res) => {
   }
 });
 
-/**
- * POST /convert-to-svg
- * 
- * Expects { "imageUrl": "URL to raster image" } in the body
- * Converts the image to SVG using potrace, saves it, and returns the path
- */
+
 app.post('/convert-to-svg', async (req, res) => {
   try {
     const { imageUrl } = req.body;
@@ -324,10 +313,7 @@ app.post('/convert-to-svg', async (req, res) => {
   }
 });
 
-/**
- * Utility function to download an image from `imageUrl`,
- * then pass its buffer to potrace to convert it into SVG.
- */
+
 function vectorizeImage(imageUrl, callback) {
   axios
     .get(imageUrl, { responseType: 'arraybuffer' })
@@ -350,17 +336,153 @@ function vectorizeImage(imageUrl, callback) {
     });
 }
 
-/*
-// Finally, start the server
-app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}`);
-});
-*/ 
 
-// ✅ Export the app for Vercel (No need for app.listen)
+
+//  Export the app for Vercel (No need for app.listen)
 module.exports = app;
 
-// ✅ Optional: Optimize for Edge Functions on Vercel
+//  Optional: Optimize for Edge Functions on Vercel
+export const config = {
+  runtime: "edge",
+};
+
+*/ 
+
+const express = require("express");
+const cors = require("cors");
+const bodyParser = require("body-parser");
+const dotenv = require("dotenv");
+const path = require("path");
+const fs = require("fs");
+const axios = require("axios");
+const potrace = require("potrace");
+const { fal } = require("@fal-ai/client");
+const fetch = require("node-fetch"); // ✅ Explicitly import fetch for Fal.AI
+
+dotenv.config();
+
+const app = express();
+
+// Directory where images & SVGs will be saved
+const imageSaveDirectory = path.join(__dirname, "public", "images");
+if (!fs.existsSync(imageSaveDirectory)) {
+  fs.mkdirSync(imageSaveDirectory, { recursive: true });
+}
+
+// Middlewares
+app.use(cors());
+app.use(express.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static("public"));
+
+// Serve the frontend page
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+/**
+ * ✅ POST /api/generate-image
+ * Generates an image from the given text prompt using Fal.AI
+ */
+app.post("/api/generate-image", async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: "❌ Missing prompt in request" });
+  }
+
+  console.log(`🔥 Generating image for prompt: ${prompt}`);
+
+  try {
+    const result = await fal.subscribe("fal-ai/flux-pro/v1.1-ultra", {
+      input: { prompt },
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === "IN_PROGRESS") {
+          update.logs.map((log) => log.message).forEach(console.log);
+        }
+      },
+      fetch,
+    });
+
+    if (!result?.data?.images?.length) {
+      return res.status(500).json({ error: "❌ Image generation failed" });
+    }
+
+    const imageUrl = result.data.images[0].url;
+    console.log(`✅ Generated Image URL: ${imageUrl}`);
+
+    res.json({ success: true, imageUrl });
+  } catch (error) {
+    console.error("🔥 Fal.AI API Error:", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+/**
+ * ✅ POST /api/convert-to-svg
+ * Converts a raster image into an SVG using Potrace
+ */
+app.post("/api/convert-to-svg", async (req, res) => {
+  try {
+    const { imageUrl } = req.body;
+    if (!imageUrl) {
+      return res.status(400).json({ error: "❌ Image URL is required for SVG conversion" });
+    }
+
+    vectorizeImage(imageUrl, (svgData) => {
+      if (svgData) {
+        const filename = `image-${Date.now()}.svg`;
+        const filePath = path.join(imageSaveDirectory, filename);
+
+        fs.writeFile(filePath, svgData, (err) => {
+          if (err) {
+            console.error("❌ Error saving SVG file:", err);
+            return res.status(500).json({ success: false, error: "Failed to save SVG file" });
+          }
+
+          console.log("✅ SVG file saved:", filePath);
+          res.json({ success: true, svgData, filePath });
+        });
+      } else {
+        console.error("❌ Error vectorizing image:", imageUrl);
+        res.status(500).json({ success: false, error: "Error vectorizing image" });
+      }
+    });
+  } catch (error) {
+    console.error("🔥 SVG Conversion Error:", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+/**
+ * ✅ Utility function to vectorize an image using Potrace
+ */
+function vectorizeImage(imageUrl, callback) {
+  axios
+    .get(imageUrl, { responseType: "arraybuffer" })
+    .then((response) => {
+      const imageBuffer = Buffer.from(response.data);
+
+      potrace.trace(imageBuffer, (err, svg) => {
+        if (err) {
+          console.error("❌ Error vectorizing image:", err);
+          callback(null);
+        } else {
+          console.log("✅ Vectorization result:", svg);
+          callback(svg);
+        }
+      });
+    })
+    .catch((error) => {
+      console.error("❌ Error downloading image for vectorization:", error);
+      callback(null);
+    });
+}
+
+// ✅ Export app for Vercel (No need for app.listen)
+module.exports = app;
+
+// ✅ Optimize for Vercel Edge Functions
 export const config = {
   runtime: "edge",
 };
