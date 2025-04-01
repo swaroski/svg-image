@@ -48,10 +48,4 @@ This application's code was entirely created using ChatGPT without writing a sin
 - Quality Settings: Adjust the quality of generated images.
 - Auto-Save Mode: Choose between automatic saving for images and SVGs or saving individual outputs as needed.
 
-### Problems/Limitations:
-  - AI-generated code structure may have limitations.
-  - Dependent on API limits for concurrent image generation.
-  - Output quality can vary based on prompt clarity.
-  - AI-generated code may lack optimization found in manually coded apps.
-  - API constraints limit the number of images generated per minute.
-  - Output quality influenced by prompt specificity.
+
